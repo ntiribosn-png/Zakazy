@@ -2,89 +2,161 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Заказы</title>
+  <title>Мои заказы</title>
+
   <style>
-    body { font-family: Arial; max-width: 600px; margin: 50px auto; }
-    input, button { padding: 5px; margin: 5px 0; width: 100%; box-sizing: border-box; }
-    ul { padding-left: 20px; }
-    .order-item { display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .order-text { flex-grow: 1; }
-    .delete-btn { margin-left: 10px; background: red; color: white; border: none; padding: 3px 7px; cursor: pointer; }
+    body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+    input, textarea, button { width: 100%; margin-top: 10px; padding: 10px; font-size: 16px; box-sizing: border-box; }
+    canvas { border: 2px solid black; margin-top: 10px; background: white; touch-action: none; }
+    .order { background: white; padding: 12px; margin-top: 15px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .order img { max-width: 200px; margin-top: 5px; }
+    .order-buttons { margin-top: 5px; }
+    .delete-btn { background: red; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 5px; }
+    #app { display: none; }
   </style>
 </head>
 <body>
-  <h1>Список заказов</h1>
+
+<!-- Экран входа -->
+<div id="login">
+  <h2>Введите пароль</h2>
+  <input type="password" id="password" placeholder="Пароль">
+  <button onclick="checkPassword()">Войти</button>
+</div>
+
+<!-- Основное приложение -->
+<div id="app">
+  <h2>Добавить заказ</h2>
 
   <input id="name" placeholder="Имя клиента">
-  <input id="order" placeholder="Описание заказа">
-  <button id="addOrderBtn">Добавить заказ</button>
+  <input id="address" placeholder="Адрес">
+  <textarea id="desc" placeholder="Описание заказа"></textarea>
 
-  <h2>Текущие заказы:</h2>
-  <ul id="ordersList"></ul>
+  <canvas id="canvas" width="300" height="200"></canvas>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove, child } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+  <button onclick="saveOrder()">Сохранить заказ</button>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyA03wt9E9BjkOZi7mX8ak_ozkfOqEM_kvE",
-      authDomain: "zakazy-6b71e.firebaseapp.com",
-      databaseURL: "https://zakazy-6b71e-default-rtdb.firebaseio.com",
-      projectId: "zakazy-6b71e",
-      storageBucket: "zakazy-6b71e.firebasestorage.app",
-      messagingSenderId: "84181179895",
-      appId: "1:84181179895:web:a908d34fe8785be49ce2f2",
-      measurementId: "G-LSE05HJQ0L"
-    };
+  <h2>Список заказов</h2>
+  <div id="orders"></div>
+</div>
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const ordersRef = ref(db, 'orders');
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  import { getDatabase, ref, push, onValue, remove, child } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-    // ====== Добавление заказа ======
-    document.getElementById('addOrderBtn').addEventListener('click', () => {
-      const name = document.getElementById('name').value.trim();
-      const order = document.getElementById('order').value.trim();
-      if (!name || !order) return alert("Заполните оба поля!");
+  // ====== ПАРОЛЬ ======
+  const SITE_PASSWORD = "1234"; // можешь поменять
 
-      push(ordersRef, {
-        name,
-        order,
-        time: new Date().toLocaleString()
-      });
+  function checkPassword() {
+    const pass = document.getElementById("password").value;
+    if (pass === SITE_PASSWORD) {
+      document.getElementById("login").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      loadOrders();
+    } else {
+      alert("Неверный пароль");
+    }
+  }
 
-      document.getElementById('name').value = '';
-      document.getElementById('order').value = '';
-    });
+  // ====== РИСОВАНИЕ ======
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  let drawing = false;
 
-    // ====== Отображение заказов ======
-    onValue(ordersRef, (snapshot) => {
-      const ordersList = document.getElementById('ordersList');
-      ordersList.innerHTML = '';
+  canvas.addEventListener("mousedown", () => drawing = true);
+  canvas.addEventListener("mouseup", () => { drawing = false; ctx.beginPath(); });
+  canvas.addEventListener("mousemove", draw);
+  canvas.addEventListener("touchstart", () => drawing = true);
+  canvas.addEventListener("touchend", () => { drawing = false; ctx.beginPath(); });
+  canvas.addEventListener("touchmove", drawTouch);
+
+  function draw(e) {
+    if (!drawing) return;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(e.offsetX, e.offsetY);
+  }
+
+  function drawTouch(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  }
+
+  // ====== Firebase ======
+  const firebaseConfig = {
+    apiKey: "AIzaSyA03wt9E9BjkOZi7mX8ak_ozkfOqEM_kvE",
+    authDomain: "zakazy-6b71e.firebaseapp.com",
+    databaseURL: "https://zakazy-6b71e-default-rtdb.firebaseio.com",
+    projectId: "zakazy-6b71e",
+    storageBucket: "zakazy-6b71e.firebasestorage.app",
+    messagingSenderId: "84181179895",
+    appId: "1:84181179895:web:a908d34fe8785be49ce2f2",
+    measurementId: "G-LSE05HJQ0L"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const ordersRef = ref(db, 'orders');
+
+  // ====== СОХРАНЕНИЕ ЗАКАЗА ======
+  window.saveOrder = () => {
+    const name = document.getElementById("name").value.trim();
+    const address = document.getElementById("address").value.trim();
+    const desc = document.getElementById("desc").value.trim();
+    const image = canvas.toDataURL();
+    const date = new Date().toLocaleString();
+
+    if (!name) { alert("Введите имя клиента"); return; }
+
+    push(ordersRef, { name, address, desc, image, date });
+
+    // очистка формы
+    document.getElementById("name").value = "";
+    document.getElementById("address").value = "";
+    document.getElementById("desc").value = "";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  // ====== ЗАГРУЗКА И ОТОБРАЖЕНИЕ ЗАКАЗОВ ======
+  function loadOrders() {
+    const ordersDiv = document.getElementById("orders");
+    onValue(ordersRef, snapshot => {
+      ordersDiv.innerHTML = "";
       const data = snapshot.val();
       if (!data) return;
-
-      Object.entries(data).forEach(([key, item]) => {
-        const li = document.createElement('li');
-        li.className = 'order-item';
-
-        const span = document.createElement('span');
-        span.className = 'order-text';
-        span.textContent = `${item.time} — ${item.name}: ${item.order}`;
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'delete-btn';
-        delBtn.textContent = 'Удалить';
-        delBtn.onclick = () => {
-          const orderToRemove = child(ordersRef, key);
-          remove(orderToRemove);
+      Object.entries(data).reverse().forEach(([key, order]) => {
+        const div = document.createElement("div");
+        div.className = "order";
+        div.innerHTML = `
+          <b>${order.name}</b> — ${order.date}<br>
+          <b>Адрес:</b> ${order.address || "-"}<br>
+          <b>Описание:</b> ${order.desc || "-"}<br>
+          <img src="${order.image}" width="200">
+          <div class="order-buttons">
+            <button class="delete-btn">Удалить</button>
+          </div>
+        `;
+        div.querySelector(".delete-btn").onclick = () => {
+          remove(child(ordersRef, key));
         };
-
-        li.appendChild(span);
-        li.appendChild(delBtn);
-        ordersList.appendChild(li);
+        ordersDiv.appendChild(div);
       });
     });
-  </script>
+  }
+</script>
+
 </body>
 </html>
