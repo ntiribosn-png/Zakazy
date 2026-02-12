@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Заказы</title>
+  <style>
+    body { font-family: Arial; max-width: 600px; margin: 50px auto; }
+    input, button { padding: 5px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    ul { padding-left: 20px; }
+    .order-item { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .order-text { flex-grow: 1; }
+    .delete-btn { margin-left: 10px; background: red; color: white; border: none; padding: 3px 7px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Список заказов</h1>
+
+  <input id="name" placeholder="Имя клиента">
+  <input id="order" placeholder="Описание заказа">
+  <button id="addOrderBtn">Добавить заказ</button>
+
+  <h2>Текущие заказы:</h2>
+  <ul id="ordersList"></ul>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+    import { getDatabase, ref, push, onValue, remove, child } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA03wt9E9BjkOZi7mX8ak_ozkfOqEM_kvE",
+      authDomain: "zakazy-6b71e.firebaseapp.com",
+      databaseURL: "https://zakazy-6b71e-default-rtdb.firebaseio.com",
+      projectId: "zakazy-6b71e",
+      storageBucket: "zakazy-6b71e.firebasestorage.app",
+      messagingSenderId: "84181179895",
+      appId: "1:84181179895:web:a908d34fe8785be49ce2f2",
+      measurementId: "G-LSE05HJQ0L"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const ordersRef = ref(db, 'orders');
+
+    // ====== Добавление заказа ======
+    document.getElementById('addOrderBtn').addEventListener('click', () => {
+      const name = document.getElementById('name').value.trim();
+      const order = document.getElementById('order').value.trim();
+      if (!name || !order) return alert("Заполните оба поля!");
+
+      push(ordersRef, {
+        name,
+        order,
+        time: new Date().toLocaleString()
+      });
+
+      document.getElementById('name').value = '';
+      document.getElementById('order').value = '';
+    });
+
+    // ====== Отображение заказов ======
+    onValue(ordersRef, (snapshot) => {
+      const ordersList = document.getElementById('ordersList');
+      ordersList.innerHTML = '';
+      const data = snapshot.val();
+      if (!data) return;
+
+      Object.entries(data).forEach(([key, item]) => {
+        const li = document.createElement('li');
+        li.className = 'order-item';
+
+        const span = document.createElement('span');
+        span.className = 'order-text';
+        span.textContent = `${item.time} — ${item.name}: ${item.order}`;
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = 'Удалить';
+        delBtn.onclick = () => {
+          const orderToRemove = child(ordersRef, key);
+          remove(orderToRemove);
+        };
+
+        li.appendChild(span);
+        li.appendChild(delBtn);
+        ordersList.appendChild(li);
+      });
+    });
+  </script>
+</body>
+</html>
